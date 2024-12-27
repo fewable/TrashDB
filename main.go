@@ -12,8 +12,6 @@ var client *kubernetes.Clientset
 
 var nameGenerator = words.NewBuilder().WithSeparator("-").AddMediumWord().AddMediumWord()
 
-var secretGenerator = words.NewBuilder().WithSecureRandomness().WithSeparator("-").AddMediumWord().AddLongWord()
-
 var namespace string
 
 var port string
