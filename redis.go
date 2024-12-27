@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	"github.com/rs/zerolog/log"
@@ -9,6 +10,8 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
+
+var listPodsMutex sync.Mutex
 
 var redisPodTemplate = &v1.Pod{
 	TypeMeta: metav1.TypeMeta{
@@ -82,6 +85,9 @@ func deleteRedisPod(ctx context.Context, podName string) error {
 }
 
 func listRedisPods(ctx context.Context) error {
+	listPodsMutex.Lock()
+	defer listPodsMutex.Unlock()
+
 	log.Info().Msg("Checking redis pods")
 
 	pods, err := client.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{

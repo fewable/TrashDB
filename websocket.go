@@ -3,8 +3,10 @@ package main
 import (
 	"encoding/json"
 	"net/http"
+	"time"
 
 	"github.com/rs/zerolog/log"
+	"golang.org/x/net/context"
 
 	"github.com/gorilla/websocket"
 )
@@ -57,7 +59,10 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 			sendMessage(conn, map[string]string{"message": "Pod created: " + podName, "name": podName, "secret": podSecret})
 		case "list_pod":
-			if err := listRedisPods(r.Context()); err != nil {
+			ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+			defer cancel()
+
+			if err := listRedisPods(ctx); err != nil {
 				sendMessage(conn, map[string]string{"message": "Failed to list pods"})
 				continue
 			}
