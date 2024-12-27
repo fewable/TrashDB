@@ -55,10 +55,9 @@ func createRedisPod(ctx context.Context, podName string) error {
 
 	data := redisPodTemplate.DeepCopy()
 	data.SetName(podName)
-	annotations := map[string]string{
-		"expire": time.Now().Add(90 * time.Second).Format(time.RFC3339),
-	}
-	data.ObjectMeta.SetAnnotations(annotations)
+
+	duration := int64((1 * time.Minute).Seconds())
+	data.Spec.ActiveDeadlineSeconds = &duration
 
 	_, err := client.CoreV1().Pods(namespace).Create(ctx, data, metav1.CreateOptions{})
 	if err != nil {
@@ -102,27 +101,6 @@ func listRedisPods(ctx context.Context) error {
 	for _, pod := range pods.Items {
 		logger := log.With().Str("podName", pod.Name).Logger()
 		logger.Debug().Msg("Found pod")
-
-		if isPodExpired(pod) {
-			deleteRedisPod(ctx, pod.Name)
-		}
 	}
 	return nil
-}
-
-func isPodExpired(pod v1.Pod) bool {
-	logger := log.With().Str("podName", pod.Name).Logger()
-
-	annotations := pod.GetAnnotations()
-	if expire, found := annotations["expire"]; found {
-		parsed, err := time.Parse(time.RFC3339, expire)
-		if err != nil {
-			logger.Error().Err(err).Msg("Failed to parse expire time")
-			return true
-		}
-		return time.Now().After(parsed)
-	} else {
-		logger.Info().Msg("Missing expire time annotation")
-	}
-	return true
 }
