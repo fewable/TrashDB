@@ -5,7 +5,7 @@ go 1.23.0
 toolchain go1.23.4
 
 require (
-	github.com/fewable/words v1.0.0
+	github.com/fewable/words v1.0.1
 	github.com/gorilla/websocket v1.5.3
 	github.com/rs/zerolog v1.33.0
 	k8s.io/api v0.32.0
