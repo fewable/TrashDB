@@ -3,129 +3,236 @@ package trashdb_test
 import (
 	"context"
 	"fmt"
-	"strings"
 	"testing"
 	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/taimoorgit/trashdb/trashdb"
 	v1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-var examplePod = &v1.Pod{
-	TypeMeta: metav1.TypeMeta{
-		APIVersion: "v1",
-		Kind:       "Pod",
-	},
-	ObjectMeta: metav1.ObjectMeta{
-		Name:      "testing-123",
-		Namespace: "namespace-123",
-		Labels: map[string]string{
-			"app.kubernetes.io/name":       "redis",
-			"app.kubernetes.io/instance":   "redis-testing-123",
-			"app.kubernetes.io/version":    "7.4",
-			"app.kubernetes.io/component":  "cache",
-			"app.kubernetes.io/part-of":    "trashdb",
-			"app.kubernetes.io/managed-by": "trashdb",
-		},
-		Annotations: map[string]string{
-			"app.trashdb/secret":     "X1-HIBJYLfir7HltuoiunHybtpDT39",
-			"app.trashdb/expiration": "2044-01-16T09:23:34-05:00",
-		},
-	},
-	Spec: v1.PodSpec{
-		Containers: []v1.Container{
-			v1.Container{
-				Name:  "redis",
-				Image: "redis:7.4",
-				Ports: []v1.ContainerPort{
-					v1.ContainerPort{
-						ContainerPort: 6379,
-					},
-				},
-				Resources: v1.ResourceRequirements{
-					Requests: v1.ResourceList{
-						v1.ResourceCPU:    resource.MustParse("500m"),
-						v1.ResourceMemory: resource.MustParse("256Mi"),
-					},
-					Limits: v1.ResourceList{
-						v1.ResourceCPU:    resource.MustParse("1"),
-						v1.ResourceMemory: resource.MustParse("512Mi"),
-					},
-				},
-			},
-		},
-	},
+// MockKubernetesClient implements KubernetesClient
+// MockKubernetesClient with embedded behavior as methods
+type MockKubernetesClient struct {
+	CreatePodFunc func(ctx context.Context, namespace string, pod *v1.Pod) (*v1.Pod, error)
+	ListPodsFunc  func(ctx context.Context, namespace string, listOptions metav1.ListOptions) (*v1.PodList, error)
+	DeletePodFunc func(ctx context.Context, namespace, podName string) error
+	GetPodFunc    func(ctx context.Context, namespace, podName string) (*v1.Pod, error)
 }
 
-type MockKubernetesClient struct{}
-
-func (c *MockKubernetesClient) CreatePod(ctx context.Context, namespace string, pod *v1.Pod) (*v1.Pod, error) {
-	if strings.Contains(namespace, "error") {
-		return nil, fmt.Errorf(namespace)
+// Implement the interface methods by delegating to the function fields
+func (m *MockKubernetesClient) CreatePod(ctx context.Context, namespace string, pod *v1.Pod) (*v1.Pod, error) {
+	if m.CreatePodFunc != nil {
+		return m.CreatePodFunc(ctx, namespace, pod)
 	}
-	return examplePod.DeepCopy(), nil
+	panic("CreatePod not implemented")
 }
 
-func (c *MockKubernetesClient) ListPods(ctx context.Context, namespace string, listOptions metav1.ListOptions) (*v1.PodList, error) {
-	if strings.Contains(namespace, "error") {
-		return nil, fmt.Errorf(namespace)
+func (m *MockKubernetesClient) ListPods(ctx context.Context, namespace string, listOptions metav1.ListOptions) (*v1.PodList, error) {
+	if m.ListPodsFunc != nil {
+		return m.ListPodsFunc(ctx, namespace, listOptions)
 	}
-
-	// TODO: make these different from each other, could use options to make them different easily
-	pod1 := examplePod.DeepCopy()
-	pod2 := examplePod.DeepCopy()
-	pod3 := examplePod.DeepCopy()
-
-	mockList := &v1.PodList{
-		Items: []v1.Pod{*pod1, *pod2, *pod3},
-	}
-	return mockList, nil
+	panic("ListPods not implemented")
 }
 
-func (c *MockKubernetesClient) DeletePod(ctx context.Context, namespace, podName string) error {
-	if strings.Contains(namespace, "error") {
-		return fmt.Errorf(namespace)
+func (m *MockKubernetesClient) DeletePod(ctx context.Context, namespace, podName string) error {
+	if m.DeletePodFunc != nil {
+		return m.DeletePodFunc(ctx, namespace, podName)
 	}
-	return nil
+	panic("DeletePod not implemented")
 }
 
-func (c *MockKubernetesClient) GetPod(ctx context.Context, namespace, podName string) (*v1.Pod, error) {
-	if strings.Contains(namespace, "error") {
-		return nil, fmt.Errorf(namespace)
+func (m *MockKubernetesClient) GetPod(ctx context.Context, namespace, podName string) (*v1.Pod, error) {
+	if m.GetPodFunc != nil {
+		return m.GetPodFunc(ctx, namespace, podName)
 	}
-	return examplePod.DeepCopy(), nil
+	panic("GetPod not implemented")
 }
 
-func TestGetPod(t *testing.T) { // TODO: these tests need to actually build something using mock client given args
+// Option pattern for setting mock behaviors
+type MockOption func(*MockKubernetesClient)
+
+func WithCreatePodFunc(f func(ctx context.Context, namespace string, pod *v1.Pod) (*v1.Pod, error)) MockOption {
+	return func(m *MockKubernetesClient) {
+		m.CreatePodFunc = f
+	}
+}
+
+func WithListPodsFunc(f func(ctx context.Context, namespace string, listOptions metav1.ListOptions) (*v1.PodList, error)) MockOption {
+	return func(m *MockKubernetesClient) {
+		m.ListPodsFunc = f
+	}
+}
+
+func WithDeletePodFunc(f func(ctx context.Context, namespace, podName string) error) MockOption {
+	return func(m *MockKubernetesClient) {
+		m.DeletePodFunc = f
+	}
+}
+
+func WithGetPodFunc(f func(ctx context.Context, namespace, podName string) (*v1.Pod, error)) MockOption {
+	return func(m *MockKubernetesClient) {
+		m.GetPodFunc = f
+	}
+}
+
+// Create a new mock client with options
+func NewMockKubernetesClient(opts ...MockOption) *MockKubernetesClient {
+	mock := &MockKubernetesClient{}
+	for _, opt := range opts {
+		opt(mock)
+	}
+	return mock
+}
+
+func TestGetPod(t *testing.T) {
 	type testCase struct {
 		Name        string
 		Namespace   string
 		PodName     string
 		ExpectedPod *v1.Pod
 		ExpectedErr string
-		TestClient  MockKubernetesClient
+		MockClient  trashdb.KubernetesClient
 	}
 	testCases := []testCase{
 		{
-			Name:        "Get pod success",
-			Namespace:   "namespace-123",
-			PodName:     examplePod.Name,
-			ExpectedPod: examplePod.DeepCopy(),
+			Name:      "Get pod success",
+			Namespace: "namespace-123",
+			PodName:   "pod-123",
+			ExpectedPod: trashdb.NewPod(
+				trashdb.WithNamespace("namespace-123"),
+				trashdb.WithName("pod-123"),
+			),
 			ExpectedErr: "",
+			MockClient: NewMockKubernetesClient(
+				WithGetPodFunc(
+					func(ctx context.Context, namespace, podName string) (*v1.Pod, error) {
+						return trashdb.NewPod(
+							trashdb.WithNamespace(namespace),
+							trashdb.WithName(podName),
+						), nil
+					},
+				),
+			),
 		},
 		{
 			Name:        "Get pod error",
 			Namespace:   "some error",
 			ExpectedPod: nil,
 			ExpectedErr: "some error",
+			MockClient: NewMockKubernetesClient(
+				WithGetPodFunc(
+					func(ctx context.Context, namespace, podName string) (*v1.Pod, error) {
+						return nil, fmt.Errorf("some error")
+					},
+				),
+			),
 		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.Name, func(t *testing.T) {
-			got, err := trashdb.GetPod(context.Background(), &MockKubernetesClient{}, tc.Namespace, tc.PodName)
+			got, err := trashdb.GetPod(context.Background(), tc.MockClient, tc.Namespace, tc.PodName)
+
+			// Check for error match
+			if tc.ExpectedErr != "" {
+				if err == nil || err.Error() != tc.ExpectedErr {
+					t.Errorf("Expected error %q, got %v", tc.ExpectedErr, err)
+				}
+			} else if err != nil {
+				t.Errorf("Unexpected error: %v", err)
+			}
+
+			// Check pod equality
+			if diff := cmp.Diff(tc.ExpectedPod, got); diff != "" {
+				t.Errorf("Pod mismatch (-expected +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestCreatePod(t *testing.T) {
+	type testCase struct {
+		Name        string
+		Namespace   string
+		PodName     string
+		PodSecret   string
+		Duration    time.Duration
+		ExpectedPod *v1.Pod
+		ExpectedErr string
+		MockClient  trashdb.KubernetesClient
+	}
+	testCases := []testCase{
+		{
+			Name:      "Create pod success",
+			Namespace: "namespace-123",
+			PodName:   "pod-123",
+			PodSecret: "pod-123-secret",
+			Duration:  1 * time.Hour,
+			ExpectedPod: trashdb.NewPod(
+				trashdb.WithNamespace("namespace-123"),
+				trashdb.WithName("pod-123"),
+				trashdb.WithLabels(map[string]string{
+					"app.kubernetes.io/instance": "redis-pod-123",
+				}),
+				trashdb.WithAnnotations(map[string]string{
+					"app.trashdb/expiration": time.Now().Add(1 * time.Hour).Format(time.RFC3339),
+					"app.trashdb/secret":     "pod-123-secret",
+				}),
+			),
+			ExpectedErr: "",
+			MockClient: NewMockKubernetesClient(
+				WithCreatePodFunc(func(ctx context.Context, namespace string, pod *v1.Pod) (*v1.Pod, error) {
+					return pod, nil
+				}),
+			),
+		},
+		{
+			Name:        "Create pod failure - no namespace",
+			Namespace:   "",
+			PodName:     "pod-123",
+			PodSecret:   "pod-123-secret",
+			Duration:    1 * time.Hour,
+			ExpectedPod: nil,
+			ExpectedErr: "required: namespace, podName, podSecret",
+			MockClient: NewMockKubernetesClient(
+				WithCreatePodFunc(func(ctx context.Context, namespace string, pod *v1.Pod) (*v1.Pod, error) {
+					return pod, nil
+				}),
+			),
+		},
+		{
+			Name:        "Create pod failure - no podName",
+			Namespace:   "namespace-123",
+			PodName:     "",
+			PodSecret:   "pod-123-secret",
+			Duration:    1 * time.Hour,
+			ExpectedPod: nil,
+			ExpectedErr: "required: namespace, podName, podSecret",
+			MockClient: NewMockKubernetesClient(
+				WithCreatePodFunc(func(ctx context.Context, namespace string, pod *v1.Pod) (*v1.Pod, error) {
+					return pod, nil
+				}),
+			),
+		},
+		{
+			Name:        "Create pod failure - no podSecret",
+			Namespace:   "namespace-123",
+			PodName:     "pod-123",
+			PodSecret:   "",
+			Duration:    1 * time.Hour,
+			ExpectedPod: nil,
+			ExpectedErr: "required: namespace, podName, podSecret",
+			MockClient: NewMockKubernetesClient(
+				WithCreatePodFunc(func(ctx context.Context, namespace string, pod *v1.Pod) (*v1.Pod, error) {
+					return pod, nil
+				}),
+			),
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.Name, func(t *testing.T) {
+			got, err := trashdb.CreatePod(context.Background(), tc.MockClient, tc.Namespace, tc.PodName, tc.PodSecret, tc.Duration)
 
 			// Check for error match
 			if tc.ExpectedErr != "" {
@@ -152,45 +259,29 @@ func TestPodIsExpired(t *testing.T) {
 	}
 	testCases := []testCase{
 		{
-			Name: "Has no expiration date",
-			Pod: &v1.Pod{
-				ObjectMeta: metav1.ObjectMeta{
-					Annotations: map[string]string{},
-				},
-			},
+			Name:     "Has no expiration date",
+			Pod:      trashdb.NewPod(trashdb.WithAnnotations(map[string]string{})),
 			Expected: true,
 		},
 		{
 			Name: "Has invalid expiration date",
-			Pod: &v1.Pod{
-				ObjectMeta: metav1.ObjectMeta{
-					Annotations: map[string]string{
-						"app.trashdb/expiration": "",
-					},
-				},
-			},
+			Pod: trashdb.NewPod(trashdb.WithAnnotations(map[string]string{
+				"app.trashdb/expiration": "",
+			})),
 			Expected: true,
 		},
 		{
 			Name: "Not expired",
-			Pod: &v1.Pod{
-				ObjectMeta: metav1.ObjectMeta{
-					Annotations: map[string]string{
-						"app.trashdb/expiration": time.Now().Add(1 * time.Hour).Format(time.RFC3339),
-					},
-				},
-			},
+			Pod: trashdb.NewPod(trashdb.WithAnnotations(map[string]string{
+				"app.trashdb/expiration": time.Now().Add(1 * time.Hour).Format(time.RFC3339),
+			})),
 			Expected: false,
 		},
 		{
 			Name: "Expired",
-			Pod: &v1.Pod{
-				ObjectMeta: metav1.ObjectMeta{
-					Annotations: map[string]string{
-						"app.trashdb/expiration": time.Now().Add(-1 * time.Hour).Format(time.RFC3339),
-					},
-				},
-			},
+			Pod: trashdb.NewPod(trashdb.WithAnnotations(map[string]string{
+				"app.trashdb/expiration": time.Now().Add(-1 * time.Hour).Format(time.RFC3339),
+			})),
 			Expected: true,
 		},
 	}

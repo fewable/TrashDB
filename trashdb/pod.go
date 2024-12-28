@@ -11,7 +11,45 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-var redisPodTemplate = &v1.Pod{
+type PodOption func(*v1.Pod)
+
+func WithLabels(labels map[string]string) PodOption {
+	return func(p *v1.Pod) {
+		for k, v := range labels {
+			p.Labels[k] = v
+		}
+	}
+}
+
+func WithName(name string) PodOption {
+	return func(p *v1.Pod) {
+		p.Name = name
+	}
+}
+
+func WithNamespace(namespace string) PodOption {
+	return func(p *v1.Pod) {
+		p.Name = namespace
+	}
+}
+
+func WithAnnotations(annotations map[string]string) PodOption {
+	return func(p *v1.Pod) {
+		for k, v := range annotations {
+			p.Annotations[k] = v
+		}
+	}
+}
+
+func NewPod(options ...PodOption) *v1.Pod {
+	pod := RedisPodTemplate.DeepCopy()
+	for _, opt := range options {
+		opt(pod)
+	}
+	return pod
+}
+
+var RedisPodTemplate = &v1.Pod{
 	TypeMeta: metav1.TypeMeta{
 		APIVersion: "v1",
 		Kind:       "Pod",
@@ -60,12 +98,18 @@ func CreatePod(ctx context.Context, client KubernetesClient, namespace, podName,
 		return nil, fmt.Errorf("required: namespace, podName, podSecret")
 	}
 
-	data := redisPodTemplate.DeepCopy()
-	data.SetNamespace(namespace)
-	data.SetName(podName)
-	data.Labels["app.kubernetes.io/instance"] = "redis-" + podName
-	data.Annotations["app.trashdb/expiration"] = time.Now().Add(duration).Format(time.RFC3339)
-	data.Annotations["app.trashdb/secret"] = podSecret
+	// TODO: input validation from server can be done here... then tested here too...
+
+	data := NewPod(
+		WithNamespace(namespace),
+		WithName(podName),
+		WithLabels(map[string]string{
+			"app.kubernetes.io/instance": "redis-" + podName,
+		}),
+		WithAnnotations(map[string]string{
+			"app.trashdb/expiration": time.Now().Add(duration).Format(time.RFC3339),
+			"app.trashdb/secret":     podSecret,
+		}))
 
 	return client.CreatePod(ctx, namespace, data)
 }
