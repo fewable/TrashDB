@@ -12,10 +12,12 @@ tasks:
       - air .
 
   test:
-    desc: run tests
+    desc: run tests and output coverage files
     cmds:
-      - go test -v ./...
-  
+      - go test -v ./... -coverprofile=coverage.out
+      - go tool cover -func=coverage.out
+      - go tool cover -html=coverage.out -o coverage.html
+
   open:
     desc: open the project in the browser
     cmds:
