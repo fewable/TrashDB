@@ -1,0 +1,22 @@
+version: '3'
+
+tasks:
+  run:
+    desc: run program
+    cmds:
+      - go run main.go
+
+  dev:
+    desc: run program and watch for changes (requires `air`)
+    cmds:
+      - air .
+
+  test:
+    desc: run tests
+    cmds:
+      - go test -v ./...
+  
+  open:
+    desc: open the project in the browser
+    cmds:
+      - open "https://github.com/fewable/TrashDB" || explorer.exe "https://github.com/fewable/TrashDB"
