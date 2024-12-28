@@ -93,23 +93,17 @@ func createPodRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if body.PodName == "" {
-		body.PodName = nameGenerator.GetString()
-	} else if len(body.PodName) < 7 {
-		sendResponse(w, http.StatusBadRequest, "Pod name must be at least 7 characters", nil)
-		return
-	}
 	podName := body.PodName
+	if podName == "" {
+		podName = nameGenerator.GetString()
+	}
 	podSecret := generatePassword(30)
 
-	// TODO: set default and max using env vars...
-	if body.Duration == 0 {
-		body.Duration = 1
-	} else if body.Duration < 10 || body.Duration > 60 {
-		sendResponse(w, http.StatusBadRequest, "Duration must be between 10 and 60 minutes", nil)
-		return
-	}
 	duration := time.Duration(body.Duration) * time.Minute
+	if body.Duration == 0 {
+		// TODO: allow setting this lower for tophatting
+		duration = 10 * time.Minute
+	}
 
 	data := map[string]any{"podName": podName, "podSecret": podSecret}
 

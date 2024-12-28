@@ -12,6 +12,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+var exampleSecret = "dUjplFcUO5Zxnmm8WlJjkV0Tll4jUj"
+
 // MockKubernetesClient implements KubernetesClient
 // MockKubernetesClient with embedded behavior as methods
 type MockKubernetesClient struct {
@@ -167,7 +169,7 @@ func TestCreatePod(t *testing.T) {
 			Name:      "Create pod success",
 			Namespace: "namespace-123",
 			PodName:   "pod-123",
-			PodSecret: "pod-123-secret",
+			PodSecret: exampleSecret,
 			Duration:  1 * time.Hour,
 			ExpectedPod: trashdb.NewPod(
 				trashdb.WithNamespace("namespace-123"),
@@ -177,7 +179,7 @@ func TestCreatePod(t *testing.T) {
 				}),
 				trashdb.WithAnnotations(map[string]string{
 					"app.trashdb/expiration": time.Now().Add(1 * time.Hour).Format(time.RFC3339),
-					"app.trashdb/secret":     "pod-123-secret",
+					"app.trashdb/secret":     exampleSecret,
 				}),
 			),
 			ExpectedErr: "",
@@ -191,10 +193,10 @@ func TestCreatePod(t *testing.T) {
 			Name:        "Create pod failure - no namespace",
 			Namespace:   "",
 			PodName:     "pod-123",
-			PodSecret:   "pod-123-secret",
+			PodSecret:   exampleSecret,
 			Duration:    1 * time.Hour,
 			ExpectedPod: nil,
-			ExpectedErr: "required: namespace, podName, podSecret",
+			ExpectedErr: "required: namespace",
 			MockClient: NewMockKubernetesClient(
 				WithCreatePodFunc(func(ctx context.Context, namespace string, pod *v1.Pod) (*v1.Pod, error) {
 					return pod, nil
@@ -205,10 +207,10 @@ func TestCreatePod(t *testing.T) {
 			Name:        "Create pod failure - no podName",
 			Namespace:   "namespace-123",
 			PodName:     "",
-			PodSecret:   "pod-123-secret",
+			PodSecret:   exampleSecret,
 			Duration:    1 * time.Hour,
 			ExpectedPod: nil,
-			ExpectedErr: "required: namespace, podName, podSecret",
+			ExpectedErr: "pod name must be at least 7 characters",
 			MockClient: NewMockKubernetesClient(
 				WithCreatePodFunc(func(ctx context.Context, namespace string, pod *v1.Pod) (*v1.Pod, error) {
 					return pod, nil
@@ -222,7 +224,21 @@ func TestCreatePod(t *testing.T) {
 			PodSecret:   "",
 			Duration:    1 * time.Hour,
 			ExpectedPod: nil,
-			ExpectedErr: "required: namespace, podName, podSecret",
+			ExpectedErr: "pod secret must be at least 30 characters",
+			MockClient: NewMockKubernetesClient(
+				WithCreatePodFunc(func(ctx context.Context, namespace string, pod *v1.Pod) (*v1.Pod, error) {
+					return pod, nil
+				}),
+			),
+		},
+		{
+			Name:        "Create pod failure - duration too low",
+			Namespace:   "namespace-123",
+			PodName:     "pod-123",
+			PodSecret:   exampleSecret,
+			Duration:    -1 * time.Hour,
+			ExpectedPod: nil,
+			ExpectedErr: "duration must be between 10 and 60 minutes",
 			MockClient: NewMockKubernetesClient(
 				WithCreatePodFunc(func(ctx context.Context, namespace string, pod *v1.Pod) (*v1.Pod, error) {
 					return pod, nil

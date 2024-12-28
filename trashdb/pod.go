@@ -94,11 +94,20 @@ func CreatePod(ctx context.Context, client KubernetesClient, namespace, podName,
 		client = &RealKubernetesClient{}
 	}
 
-	if namespace == "" || podName == "" || podSecret == "" {
-		return nil, fmt.Errorf("required: namespace, podName, podSecret")
+	if namespace == "" {
+		return nil, fmt.Errorf("required: namespace")
+	}
+	if len(podName) < 7 {
+		return nil, fmt.Errorf("pod name must be at least 7 characters")
+	}
+	if len(podSecret) < 30 {
+		return nil, fmt.Errorf("pod secret must be at least 30 characters")
 	}
 
-	// TODO: input validation from server can be done here... then tested here too...
+	// TODO: allow min, max duration to be configurable using env var
+	if duration < 10*time.Minute || duration > 60*time.Minute {
+		return nil, fmt.Errorf("duration must be between 10 and 60 minutes")
+	}
 
 	data := NewPod(
 		WithNamespace(namespace),
